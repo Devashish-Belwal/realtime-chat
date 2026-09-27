@@ -1,0 +1,21 @@
+{
+  "name": "realtime-chat",
+  "private": true,
+  "scripts": {
+    "dev:server": "bun --watch apps/server/src/index.ts",
+    "dev:client": "bun --cwd apps/client run dev",
+    "dev": "concurrently \"bun run dev:server\" \"bun run dev:client\""
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.5",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ws": "^8.21.3"
+  }
+}
