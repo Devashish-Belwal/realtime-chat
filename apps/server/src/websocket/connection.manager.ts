@@ -28,14 +28,6 @@ export class ConnectionManager {
     return this.getAll().filter((u) => u.roomId === roomId);
   }
 
-  getCount(): number {
-    return this.users.size;
-  }
-
-  broadcast(message: ServerMessage): void {
-    this.users.forEach((user) => this.sendTo(user.id, message));
-  }
-
   sendTo(userId: string, message: ServerMessage): void {
     const user = this.get(userId);
     if (user && user.socket.readyState === user.socket.OPEN) {

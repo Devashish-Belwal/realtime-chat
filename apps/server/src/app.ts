@@ -1,12 +1,13 @@
 import express from "express";
 import cors from "cors";
+import { env } from "./config/env";
 import healthRouter from "./routes/health.routes";
 
 const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173"
+    origin: env.CLIENT_URL
   })
 );
 

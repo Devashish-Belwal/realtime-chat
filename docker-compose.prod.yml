@@ -1,0 +1,20 @@
+services:
+  client:
+    image: devashishbelwal/realtime-chat-client:latest
+    ports:
+      - "8080:80"
+    networks:
+      - chat-net
+    restart: unless-stopped
+
+  server:
+    image: devashishbelwal/realtime-chat-server:latest
+    ports:
+      - "3002:3002"
+    env_file: .env
+    networks:
+      - chat-net
+    restart: unless-stopped
+
+networks:
+  chat-net:

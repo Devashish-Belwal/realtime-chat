@@ -1,0 +1,28 @@
+services:
+  client:
+    build:
+      context: .
+      dockerfile: apps/client/Dockerfile
+      args:
+        VITE_WS_URL: ws://localhost:3002
+    ports:
+      - "8080:80"
+    networks:
+      - chat-net
+    depends_on:
+      - server
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      CLIENT_URL: http://localhost:8080
+    networks:
+      - chat-net
+
+networks:
+  chat-net:

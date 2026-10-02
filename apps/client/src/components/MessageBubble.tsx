@@ -1,6 +1,6 @@
-import { ChatMessage } from "../types/chat";
+import { ChatMessage, PrivateMessage } from "../../../shared/websocket";
 
-export default function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolean }) {
+export default function MessageBubble({ message, isOwn }: { message: ChatMessage | PrivateMessage; isOwn: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: isOwn ? "flex-end" : "flex-start", marginBottom: 12 }}>
       <span style={{ fontSize: 12, fontWeight: 600, color: "#9CA3AF", marginBottom: 4 }}>{isOwn ? "You" : message.username}</span>

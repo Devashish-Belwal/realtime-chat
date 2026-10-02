@@ -1,8 +1,8 @@
-import { ChatMessage } from "../types/chat";
+import { ChatMessage, PrivateMessage } from "../../../shared/websocket";
 import MessageBubble from "./MessageBubble";
 import { useEffect, useRef } from "react";
 
-export default function MessageList({ messages, currentUserId }: { messages: ChatMessage[]; currentUserId: string | null }) {
+export default function MessageList({ messages, currentUserId }: { messages: (ChatMessage | PrivateMessage)[]; currentUserId: string | null }) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
