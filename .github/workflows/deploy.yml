@@ -45,3 +45,24 @@ jobs:
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:${{ steps.vars.outputs.sha }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:${{ steps.vars.outputs.sha }}
+
+      - name: Deploy to EC2
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/realtime-chat
+            export IMAGE_TAG=${{ steps.vars.outputs.sha }}
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin || true
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:${{ steps.vars.outputs.sha }}
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:${{ steps.vars.outputs.sha }}
+            sed -i "s|${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:.*|${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:${IMAGE_TAG}|g; s|${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:.*|${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:${IMAGE_TAG}|g" docker-compose.prod.yml
+            docker compose -f docker-compose.prod.yml up -d
+            sleep 5
+            curl -sf http://localhost:3002/api/health || exit 1
