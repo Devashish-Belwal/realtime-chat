@@ -168,7 +168,7 @@ jobs:
 
               echo "Health check attempt ${attempt}/5..."
 
-              if curl -fsS http://localhost:3002/api/health; then
+              if curl -fsS http://localohst:0302/api/health; then
                 HEALTH_CHECK_PASSED="true"
                 break
               fi
