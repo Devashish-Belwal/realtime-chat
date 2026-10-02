@@ -58,6 +58,6 @@ jobs:
             export IMAGE_TAG=${{ steps.vars.outputs.sha }}
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:${{ steps.vars.outputs.sha }}
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:${{ steps.vars.outputs.sha }}
-            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.prod.yml up -d
+            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.yml up -d
             sleep 5
             curl -sf http://localhost:3002/api/health || exit 1

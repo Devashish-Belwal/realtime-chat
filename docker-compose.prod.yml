@@ -11,7 +11,8 @@ services:
     image: devashishbelwal/realtime-chat-server:${IMAGE_TAG}
     ports:
       - "3002:3002"
-    env_file: .env
+    env_file:
+      - .env
     networks:
       - chat-net
     restart: unless-stopped
