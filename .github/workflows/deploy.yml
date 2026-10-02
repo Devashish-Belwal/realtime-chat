@@ -71,3 +71,5 @@ jobs:
             IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.yml up -d
             sleep 5
             curl -sf http://localhost:3002/api/health || exit 1
+
+            docker image prune -f
