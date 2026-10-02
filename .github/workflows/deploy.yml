@@ -7,6 +7,7 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,12 +48,17 @@ jobs:
             -f apps/server/Dockerfile .
 
       - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+            docker login \
+              -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+              --password-stdin
 
       - name: Push images
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:${{ steps.vars.outputs.sha }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:latest
+
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:${{ steps.vars.outputs.sha }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:latest
 
@@ -62,14 +68,257 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+
           script: |
             set -euo pipefail
-            cd /opt/realtime-chat
-            export IMAGE_TAG=${{ steps.vars.outputs.sha }}
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-client:${{ steps.vars.outputs.sha }}
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-chat-server:${{ steps.vars.outputs.sha }}
-            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.yml up -d
-            sleep 5
-            curl -sf http://localhost:3002/api/health || exit 1
 
-            docker image prune -f
+            cd /opt/realtime-chat
+
+            NEW_IMAGE_TAG="${{ steps.vars.outputs.sha }}"
+            DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
+
+            CLIENT_IMAGE="${DOCKERHUB_USERNAME}/realtime-chat-client"
+            SERVER_IMAGE="${DOCKERHUB_USERNAME}/realtime-chat-server"
+
+            echo "========================================"
+            echo "Starting deployment"
+            echo "========================================"
+            echo "New release: ${NEW_IMAGE_TAG}"
+
+            #
+            # ---------------------------------------------------------
+            # 1. Determine the currently running release
+            # ---------------------------------------------------------
+            #
+
+            PREVIOUS_CLIENT_IMAGE="$(docker compose ps -q client | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null || true)"
+            PREVIOUS_SERVER_IMAGE="$(docker compose ps -q server | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null || true)"
+
+            PREVIOUS_CLIENT_TAG=""
+            PREVIOUS_SERVER_TAG=""
+
+            if [ -n "${PREVIOUS_CLIENT_IMAGE}" ]; then
+              PREVIOUS_CLIENT_TAG="${PREVIOUS_CLIENT_IMAGE##*:}"
+            fi
+
+            if [ -n "${PREVIOUS_SERVER_IMAGE}" ]; then
+              PREVIOUS_SERVER_TAG="${PREVIOUS_SERVER_IMAGE##*:}"
+            fi
+
+            echo "Previous client release: ${PREVIOUS_CLIENT_TAG:-none}"
+            echo "Previous server release: ${PREVIOUS_SERVER_TAG:-none}"
+
+            #
+            # ---------------------------------------------------------
+            # 2. Validate previous release
+            # ---------------------------------------------------------
+            #
+
+            HAS_PREVIOUS_RELEASE="false"
+
+            if [ -n "${PREVIOUS_CLIENT_TAG}" ] && [ -n "${PREVIOUS_SERVER_TAG}" ]; then
+
+              if [ "${PREVIOUS_CLIENT_TAG}" != "${PREVIOUS_SERVER_TAG}" ]; then
+                echo "ERROR: Client and server are running different releases."
+                echo "Client: ${PREVIOUS_CLIENT_TAG}"
+                echo "Server: ${PREVIOUS_SERVER_TAG}"
+                exit 1
+              fi
+
+              HAS_PREVIOUS_RELEASE="true"
+
+            fi
+
+            #
+            # ---------------------------------------------------------
+            # 3. Pull new release
+            # ---------------------------------------------------------
+            #
+
+            echo "Pulling new client image..."
+            docker pull "${CLIENT_IMAGE}:${NEW_IMAGE_TAG}"
+
+            echo "Pulling new server image..."
+            docker pull "${SERVER_IMAGE}:${NEW_IMAGE_TAG}"
+
+            #
+            # ---------------------------------------------------------
+            # 4. Deploy new release
+            # ---------------------------------------------------------
+            #
+
+            echo "Deploying release: ${NEW_IMAGE_TAG}"
+
+            IMAGE_TAG="${NEW_IMAGE_TAG}" \
+              docker compose -f docker-compose.yml up -d
+
+            #
+            # ---------------------------------------------------------
+            # 5. Health check
+            # ---------------------------------------------------------
+            #
+
+            echo "Waiting for application to start..."
+
+            sleep 5
+
+            HEALTH_CHECK_PASSED="false"
+
+            for attempt in 1 2 3 4 5; do
+
+              echo "Health check attempt ${attempt}/5..."
+
+              if curl -fsS http://localhost:3002/api/health; then
+                HEALTH_CHECK_PASSED="true"
+                break
+              fi
+
+              echo "Health check failed."
+
+              if [ "${attempt}" -lt 5 ]; then
+                sleep 3
+              fi
+
+            done
+
+            #
+            # ---------------------------------------------------------
+            # 6. Successful deployment
+            # ---------------------------------------------------------
+            #
+
+            if [ "${HEALTH_CHECK_PASSED}" = "true" ]; then
+
+              echo ""
+              echo "========================================"
+              echo "Deployment successful"
+              echo "========================================"
+              echo "Running release: ${NEW_IMAGE_TAG}"
+
+              docker compose ps
+
+              # Remove dangling images only after successful deployment.
+              docker image prune -f
+
+              exit 0
+            fi
+
+            #
+            # ---------------------------------------------------------
+            # 7. New deployment failed
+            # ---------------------------------------------------------
+            #
+
+            echo ""
+            echo "========================================"
+            echo "Deployment failed"
+            echo "========================================"
+
+            echo "New release: ${NEW_IMAGE_TAG}"
+
+            #
+            # ---------------------------------------------------------
+            # 8. No previous release = cannot rollback
+            # ---------------------------------------------------------
+            #
+
+            if [ "${HAS_PREVIOUS_RELEASE}" != "true" ]; then
+
+              echo "No previous release is available."
+              echo "Rollback cannot be performed."
+
+              docker compose ps
+
+              exit 1
+            fi
+
+            #
+            # ---------------------------------------------------------
+            # 9. Roll back to previous release
+            # ---------------------------------------------------------
+            #
+
+            echo ""
+            echo "========================================"
+            echo "Starting rollback"
+            echo "========================================"
+
+            echo "Rolling back to release: ${PREVIOUS_CLIENT_TAG}"
+
+            echo "Pulling previous client image..."
+            docker pull "${CLIENT_IMAGE}:${PREVIOUS_CLIENT_TAG}"
+
+            echo "Pulling previous server image..."
+            docker pull "${SERVER_IMAGE}:${PREVIOUS_SERVER_TAG}"
+
+            echo "Restoring previous release..."
+
+            IMAGE_TAG="${PREVIOUS_CLIENT_TAG}" \
+              docker compose -f docker-compose.yml up -d
+
+            #
+            # ---------------------------------------------------------
+            # 10. Rollback health check
+            # ---------------------------------------------------------
+            #
+
+            echo "Waiting for rollback to start..."
+
+            sleep 5
+
+            ROLLBACK_HEALTH_CHECK_PASSED="false"
+
+            for attempt in 1 2 3 4 5; do
+
+              echo "Rollback health check attempt ${attempt}/5..."
+
+              if curl -fsS http://localhost:3002/api/health; then
+                ROLLBACK_HEALTH_CHECK_PASSED="true"
+                break
+              fi
+
+              echo "Rollback health check failed."
+
+              if [ "${attempt}" -lt 5 ]; then
+                sleep 3
+              fi
+
+            done
+
+            #
+            # ---------------------------------------------------------
+            # 11. Rollback succeeded
+            # ---------------------------------------------------------
+            #
+
+            if [ "${ROLLBACK_HEALTH_CHECK_PASSED}" = "true" ]; then
+
+              echo ""
+              echo "========================================"
+              echo "Rollback successful"
+              echo "========================================"
+              echo "Restored release: ${PREVIOUS_CLIENT_TAG}"
+
+              docker compose ps
+
+              # The deployment itself failed, even though rollback succeeded.
+              exit 1
+            fi
+
+            #
+            # ---------------------------------------------------------
+            # 12. Rollback failed
+            # ---------------------------------------------------------
+            #
+
+            echo ""
+            echo "========================================"
+            echo "CRITICAL: Rollback failed"
+            echo "========================================"
+
+            echo "Previous release: ${PREVIOUS_CLIENT_TAG}"
+            echo "Server health check is still failing."
+
+            docker compose ps
+
+            exit 1
