@@ -363,7 +363,7 @@ export default function App() {
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "sans-serif", background: "#0F1115", color: "#F3F4F6" }}>
       <aside style={{ width: 240, padding: 20, borderRight: "1px solid #252A34", background: "#151821" }}>
-        <h3 style={{ letterSpacing: "0.08em", fontSize: 12, fontWeight: 600, marginBottom: 12, color: "#F3F4F6" }}>ROOMS</h3>
+        <h3 style={{ letterSpacing: "0.08em", fontSize: 12, fontWeight: 600, marginBottom: 12, color: "#F3F4F6" }}>ROOMS 2</h3>
         <div style={{ marginBottom: 12 }}>
           <div
             style={{ padding: "6px 10px", borderRadius: 6, cursor: "pointer", background: currentRoom === "general" ? "#6366F1" : "#1B202B", color: currentRoom === "general" ? "#fff" : "#F3F4F6", fontSize: 14, marginBottom: 4 }}
